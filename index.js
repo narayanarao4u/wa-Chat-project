@@ -70,11 +70,13 @@ client.on('message', async (message) => {
     if (content !== 'hi' && content !== 'hello' && content !== 'time' && 
         content !== 'help' && content !== 'bill25' && !content.startsWith('hi ')) {
         
-        const saved = await saveFeedback(from, message.body);
-        if (saved) {
+        const result = await saveFeedback(from, message.body);
+        if (result.success) {
             const reply = 'Thank you for your feedback. We appreciate your response.';
             await message.reply(reply);
             addMessage(reply, true);
+        } else {
+            console.log(`Feedback not saved: ${result.message} for number ${from}`);
         }
     }
 

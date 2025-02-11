@@ -1,79 +1,124 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const mysql = require('mysql2');
 
-const db = new sqlite3.Database(path.join(__dirname, 'whatsapp.db'));
+const pool = mysql.createPool({
+    host: '10.34.130.254',
+    user: 'bsnlvm',
+    password: 'bsnl@123',
+    database: 'ipScanDb',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+// Convert pool to use promises
+const promisePool = pool.promise();
 
 // Initialize database tables
-db.serialize(() => {
-    // Customers table for uploaded CSV data
-    db.run(`CREATE TABLE IF NOT EXISTS customers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        mobile_no TEXT UNIQUE,
-        landline_no TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+async function initializeDatabase() {
+    try {
+        // Customers table
+        await promisePool.query(`
+            CREATE TABLE IF NOT EXISTS whatsapp_customers (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                mobile_no VARCHAR(15) UNIQUE,
+                landline_no VARCHAR(20),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-    // Feedbacks table
-    db.run(`CREATE TABLE IF NOT EXISTS feedbacks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        mobile_no TEXT,
-        feedback TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(mobile_no) REFERENCES customers(mobile_no)
-    )`);
-});
+        // Feedbacks table
+        await promisePool.query(`
+            CREATE TABLE IF NOT EXISTS whatsapp_feedbacks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                mobile_no VARCHAR(15),
+                feedback TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (mobile_no) REFERENCES whatsapp_customers(mobile_no)
+            )
+        `);
+
+        console.log('Database tables initialized successfully');
+    } catch (error) {
+        console.error('Error initializing database:', error);
+    }
+}
+
+// Initialize tables
+initializeDatabase();
 
 const dbOps = {
     // Add customer from CSV
-    addCustomer: (mobileNo, landlineNo) => {
-        return new Promise((resolve, reject) => {
-            db.run(
-                'INSERT OR REPLACE INTO customers (mobile_no, landline_no) VALUES (?, ?)',
-                [mobileNo, landlineNo],
-                (err) => err ? reject(err) : resolve()
+    addCustomer: async (mobileNo, landlineNo) => {
+        try {
+            await promisePool.query(
+                'INSERT INTO whatsapp_customers (mobile_no, landline_no) VALUES (?, ?) ON DUPLICATE KEY UPDATE landline_no = ?',
+                [mobileNo, landlineNo, landlineNo]
             );
-        });
+            return { success: true };
+        } catch (error) {
+            console.error('Error adding customer:', error);
+            return { success: false, error };
+        }
     },
 
-    // Save feedback
-    saveFeedback: (mobileNo, feedback) => {
-        return new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO feedbacks (mobile_no, feedback) VALUES (?, ?)',
-                [mobileNo, feedback],
-                (err) => err ? reject(err) : resolve()
+    // Check if customer exists and save feedback
+    saveFeedback: async (mobileNo, feedback) => {
+        try {
+            // First check if customer exists
+            const [customers] = await promisePool.query(
+                'SELECT mobile_no FROM whatsapp_customers WHERE mobile_no = ?',
+                [mobileNo]
             );
-        });
+
+            if (customers.length === 0) {
+                return { success: false, message: "Mobile number not found in customers list" };
+            }
+
+            // Save feedback
+            await promisePool.query(
+                'INSERT INTO whatsapp_feedbacks (mobile_no, feedback) VALUES (?, ?)',
+                [mobileNo, feedback]
+            );
+
+            return { success: true, message: "Feedback saved successfully" };
+        } catch (error) {
+            console.error('Error saving feedback:', error);
+            return { success: false, error: error.message };
+        }
     },
 
     // Get all feedbacks with customer info
-    getFeedbacks: () => {
-        return new Promise((resolve, reject) => {
-            db.all(`
+    getFeedbacks: async () => {
+        try {
+            const [rows] = await promisePool.query(`
                 SELECT 
                     f.created_at as timestamp,
                     f.mobile_no as mobileNo,
                     c.landline_no as landlineNo,
                     f.feedback
-                FROM feedbacks f
-                LEFT JOIN customers c ON f.mobile_no = c.mobile_no
+                FROM whatsapp_feedbacks f
+                LEFT JOIN whatsapp_customers c ON f.mobile_no = c.mobile_no
                 ORDER BY f.created_at DESC
-            `, [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+            `);
+            return rows;
+        } catch (error) {
+            console.error('Error getting feedbacks:', error);
+            throw error;
+        }
     },
 
     // Get customer by mobile number
-    getCustomer: (mobileNo) => {
-        return new Promise((resolve, reject) => {
-            db.get(
-                'SELECT * FROM customers WHERE mobile_no = ?',
-                [mobileNo],
-                (err, row) => err ? reject(err) : resolve(row)
+    getCustomer: async (mobileNo) => {
+        try {
+            const [rows] = await promisePool.query(
+                'SELECT * FROM whatsapp_customers WHERE mobile_no = ?',
+                [mobileNo]
             );
-        });
+            return rows[0];
+        } catch (error) {
+            console.error('Error getting customer:', error);
+            throw error;
+        }
     }
 };
 
