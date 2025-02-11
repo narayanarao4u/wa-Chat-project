@@ -119,6 +119,38 @@ const dbOps = {
             console.error('Error getting customer:', error);
             throw error;
         }
+    },
+
+    // Get feedback statistics
+    getFeedbackStats: async () => {
+        try {
+            const [daily] = await promisePool.query(`
+                SELECT DATE(created_at) as date, COUNT(*) as count
+                FROM whatsapp_feedbacks
+                GROUP BY DATE(created_at)
+                ORDER BY date DESC
+                LIMIT 30
+            `);
+
+            const [distribution] = await promisePool.query(`
+                SELECT feedback, COUNT(*) as count
+                FROM whatsapp_feedbacks
+                GROUP BY feedback
+                ORDER BY count DESC
+            `);
+
+            const [customerStats] = await promisePool.query(`
+                SELECT 
+                    COUNT(DISTINCT mobile_no) as unique_customers,
+                    COUNT(*) as total_feedbacks
+                FROM whatsapp_feedbacks
+            `);
+
+            return { daily, distribution, customerStats: customerStats[0] };
+        } catch (error) {
+            console.error('Error getting feedback stats:', error);
+            throw error;
+        }
     }
 };
 

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSNL Customer Feedback Reports</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/reports.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BSNL Customer Feedback Dashboard</h1>
+            <% if (typeof stats === 'undefined') { %>
+                <p class="error">No data available</p>
+            <% } %>
+        </header>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Total Feedbacks</h3>
+                <p id="totalFeedbacks">Loading...</p>
+            </div>
+            <div class="stat-card">
+                <h3>Unique Customers</h3>
+                <p id="uniqueCustomers">Loading...</p>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h2>Feedback Trend (Last 30 Days)</h2>
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Feedback Distribution</h2>
+                <canvas id="distributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <% if (typeof stats !== 'undefined') { %>
+        <script>
+            const statsData = <%- stats %>;
+        </script>
+    <% } else { %>
+        <script>
+            const statsData = null;
+            console.error('No stats data available');
+        </script>
+    <% } %>
+    <script src="/js/reports.js"></script>
+</body>
+</html>

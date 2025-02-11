@@ -17,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 // Setup EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.use(express.static('public'));
 
 // Store messages
 const messages = [];
@@ -221,6 +222,17 @@ app.get('/feedbacks', async (req, res) => {
     } catch (error) {
         console.error('Error reading feedbacks:', error);
         res.status(500).send('Error loading feedbacks');
+    }
+});
+
+// Fix the reports route
+app.get('/reports', async (req, res) => {
+    try {
+        const stats = await db.getFeedbackStats(); // Changed from dbOps to db
+        res.render('reports', { stats: JSON.stringify(stats) });
+    } catch (error) {
+        console.error('Error rendering reports:', error);
+        res.status(500).send('Error generating reports');
     }
 });
 

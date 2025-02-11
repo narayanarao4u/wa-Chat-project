@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Feedback Reports</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            width: 80%;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .stats-container {
+            text-align: center;
+            margin: 20px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="stats-container">
+        <h2>Customer Feedback Overview</h2>
+        <div id="totalStats"></div>
+    </div>
+    <div class="chart-container">
+        <canvas id="trendChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="distributionChart"></canvas>
+    </div>
+
+    <script>
+        async function loadCharts() {
+            const response = await fetch('/api/feedback-stats');
+            const data = await response.json();
+
+            // Display total stats
+            const statsHtml = `
+                <p>Total Feedbacks: ${data.customerStats.total_feedbacks}</p>
+                <p>Unique Customers: ${data.customerStats.unique_customers}</p>
+            `;
+            document.getElementById('totalStats').innerHTML = statsHtml;
+
+            // Daily trend chart
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: data.daily.map(d => new Date(d.date).toLocaleDateString()),
+                    datasets: [{
+                        label: 'Daily Feedbacks',
+                        data: data.daily.map(d => d.count),
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Feedback Trend (Last 30 Days)'
+                        }
+                    }
+                }
+            });
+
+            // Feedback distribution chart
+            const distCtx = document.getElementById('distributionChart').getContext('2d');
+            new Chart(distCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.distribution.map(d => d.feedback),
+                    datasets: [{
+                        data: data.distribution.map(d => d.count),
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                            '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Feedback Distribution'
+                        }
+                    }
+                }
+            });
+        }
+
+        loadCharts();
+    </script>
+</body>
+</html>
