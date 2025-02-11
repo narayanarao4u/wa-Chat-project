@@ -213,7 +213,12 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                     
                     if (mobileNo && mobileNo.length === 10) {
                         const formattedPhone = '91' + mobileNo + '@c.us';
-                        const message = `Your landline No ${landlineNo} is disconnected recently. Please share your reasons for disconnection to help us provide better service.`;
+                        const message = `Your landline No ${landlineNo} is disconnected recently. 
+                        Please share your reasons for disconnection to help us provide better service.
+                        1. excess billing issue
+                        2. poor service quality
+                        3. other reasons
+                        `;
                         
                         try {
                             await client.sendMessage(formattedPhone, message);
