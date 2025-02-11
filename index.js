@@ -8,8 +8,8 @@ const io = require('socket.io')(http);
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
-const csvWriter = require('csv-write-stream');
 const upload = multer({ dest: 'uploads/' });
+const db = require('./database');
 
 // Add body parser middleware
 app.use(express.urlencoded({ extended: true }));
@@ -33,44 +33,10 @@ const addMessage = (message, isBot = false) => {
     io.emit('new-message', messageData);
 };
 
-// Add after other const declarations
-const FEEDBACK_FILE = 'feedback.csv';
-
-// Initialize feedback CSV if it doesn't exist
-if (!fs.existsSync(FEEDBACK_FILE)) {
-    const writer = csvWriter({ headers: ['timestamp', 'mobileNo', 'landlineNo', 'feedback']});
-    writer.pipe(fs.createWriteStream(FEEDBACK_FILE));
-    writer.end();
-}
-
 // Add this function after addMessage function
 const saveFeedback = async (mobileNo, feedback) => {
     try {
-        // Read the original CSV to find the landline number
-        const results = [];
-        await new Promise((resolve, reject) => {
-            fs.createReadStream('uploads/last_upload.csv')
-                .pipe(csv())
-                .on('data', (data) => results.push(data))
-                .on('end', resolve)
-                .on('error', reject);
-        });
-
-        // Find matching mobile number
-        const record = results.find(row => row.mobileNo.trim() === mobileNo);
-        const landlineNo = record ? record.landlineNo : 'Unknown';
-
-        // Append to feedback CSV
-        const writer = csvWriter({sendHeaders: false});
-        writer.pipe(fs.createWriteStream(FEEDBACK_FILE, {flags: 'a'}));
-        writer.write({
-            timestamp: new Date().toISOString(),
-            mobileNo,
-            landlineNo,
-            feedback
-        });
-        writer.end();
-
+        await db.saveFeedback(mobileNo, feedback);
         return true;
     } catch (error) {
         console.error('Error saving feedback:', error);
@@ -197,9 +163,6 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
         return res.status(400).send('No file uploaded');
     }
 
-    // Save a copy of the uploaded CSV
-    fs.copyFileSync(req.file.path, 'uploads/last_upload.csv');
-
     const results = [];
     fs.createReadStream(req.file.path)
         .pipe(csv())
@@ -212,12 +175,18 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                     const landlineNo = row.landlineNo.trim();
                     
                     if (mobileNo && mobileNo.length === 10) {
+                        // Save to database first
+                        await db.addCustomer(mobileNo, landlineNo);
+                        
                         const formattedPhone = '91' + mobileNo + '@c.us';
-                        const message = `Your landline No ${landlineNo} is disconnected recently. 
-                        Please share your reasons for disconnection to help us provide better service.
-                        1. excess billing issue
-                        2. poor service quality
-                        3. other reasons
+                        const message = `
+
+Your landline No ${landlineNo} is disconnected recently. 
+Please share your reasons for disconnection to help us provide better service.
+  1. excess billing issue
+  2. poor service quality
+  3. other reasons
+
                         `;
                         
                         try {
@@ -226,7 +195,6 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                                 from: 'CSV Bulk Sender',
                                 body: `[To: ${mobileNo}] ${message}`
                             });
-                            // Add delay to prevent flooding
                             await new Promise(resolve => setTimeout(resolve, 1000));
                         } catch (error) {
                             console.error(`Failed to send message to ${mobileNo}:`, error);
@@ -234,9 +202,7 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                     }
                 }
                 
-                // Clean up uploaded file
                 fs.unlinkSync(req.file.path);
-                
                 res.redirect('/');
             } catch (error) {
                 console.error('Error processing CSV:', error);
@@ -248,16 +214,8 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
 // Add new route before app.listen
 app.get('/feedbacks', async (req, res) => {
     try {
-        const feedbacks = [];
-        await new Promise((resolve, reject) => {
-            fs.createReadStream(FEEDBACK_FILE)
-                .pipe(csv())
-                .on('data', (data) => feedbacks.push(data))
-                .on('end', resolve)
-                .on('error', reject);
-        });
-        
-        res.render('feedbacks', { feedbacks: feedbacks.reverse() }); // Show newest first
+        const feedbacks = await db.getFeedbacks();
+        res.render('feedbacks', { feedbacks });
     } catch (error) {
         console.error('Error reading feedbacks:', error);
         res.status(500).send('Error loading feedbacks');
