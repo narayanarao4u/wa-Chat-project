@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload CSV - Bulk Message Sender</title>
+    <style>
+        /* Reuse existing styles from send-message.ejs */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #075E54;
+        }
+        button {
+            background-color: #128C7E;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .progress {
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            background-color: #DCF8C6;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        #csvPreview {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload CSV for Bulk Messages</h1>
+        <form action="/upload-csv" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="csvFile">Select CSV File:</label>
+                <input type="file" id="csvFile" name="csvFile" accept=".csv" required 
+                       onchange="previewCSV(this)">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    CSV should have columns: mobileNo, landlineNo
+                </small>
+            </div>
+            <button type="submit">Upload and Send Messages</button>
+        </form>
+
+        <div class="progress">
+            <h3>Sending Messages...</h3>
+            <div class="progress-bar">
+                <span id="progressText">0/0 messages sent</span>
+            </div>
+        </div>
+
+        <div id="csvPreview"></div>
+
+        <div class="nav-links" style="margin-top: 20px; text-align: center;">
+            <a href="/" style="color: #128C7E; text-decoration: none;">Back to Chat Monitor</a>
+        </div>
+    </div>
+
+    <script>
+        function previewCSV(input) {
+            const file = input.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                const headers = lines[0].split(',');
+                
+                let tableHTML = '<h3>CSV Preview:</h3><table>';
+                tableHTML += '<tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr>';
+                
+                lines.slice(1, 6).forEach(line => {
+                    if (line.trim()) {
+                        const cells = line.split(',');
+                        tableHTML += '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+                    }
+                });
+                
+                tableHTML += '</table>';
+                if (lines.length > 6) {
+                    tableHTML += '<p>...and ' + (lines.length - 6) + ' more rows</p>';
+                }
+                
+                document.getElementById('csvPreview').innerHTML = tableHTML;
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>

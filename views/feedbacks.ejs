@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customer Feedbacks</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .nav-links {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .nav-links a {
+            color: #128C7E;
+            text-decoration: none;
+            padding: 5px 10px;
+            border: 1px solid #128C7E;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .nav-links a:hover {
+            background-color: #128C7E;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            table-layout: fixed;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #128C7E;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .search-box {
+            margin: 20px 0;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .export-btn {
+            background-color: #128C7E;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .empty-message {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        td {
+            max-width: 300px;
+            overflow-wrap: break-word;
+        }
+        .invalid-data {
+            color: #999;
+            font-style: italic;
+        }
+        th:nth-child(1) { width: 20%; } /* Date & Time */
+        th:nth-child(2) { width: 15%; } /* Mobile No */
+        th:nth-child(3) { width: 15%; } /* Landline No */
+        th:nth-child(4) { width: 50%; } /* Feedback */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Customer Feedbacks</h1>
+        <div class="nav-links">
+            <a href="/">Chat Monitor</a>
+            <a href="/upload">Upload CSV</a>
+            <a href="/send">Send Message</a>
+        </div>
+        
+        <input type="text" id="searchBox" class="search-box" placeholder="Search feedbacks...">
+        <button onclick="downloadCSV()" class="export-btn">Export to CSV</button>
+
+        <% if (feedbacks && feedbacks.length > 0) { %>
+            <table id="feedbackTable">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Mobile No</th>
+                        <th>Landline No</th>
+                        <th>Feedback</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% feedbacks.forEach(function(feedback) { %>
+                        <tr>
+                            <td>
+                                <% try { %>
+                                    <%= new Date(feedback.timestamp).toLocaleString('en-IN', {
+                                        dateStyle: 'medium',
+                                        timeStyle: 'short'
+                                    }) %>
+                                <% } catch(e) { %>
+                                    <span class="invalid-data">Invalid Date</span>
+                                <% } %>
+                            </td>
+                            <td><%= feedback.mobileNo || '<No Number>' %></td>
+                            <td><%= feedback.landlineNo || 'Unknown' %></td>
+                            <td><%= feedback.feedback || '<No Feedback>' %></td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        <% } else { %>
+            <div class="empty-message">
+                <h3>No feedbacks available</h3>
+                <p>Feedbacks will appear here once customers respond to messages.</p>
+            </div>
+        <% } %>
+    </div>
+
+    <script>
+        function searchTable() {
+            const input = document.getElementById('searchBox').value.toLowerCase();
+            const table = document.getElementById('feedbackTable');
+            const rows = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(input) ? '' : 'none';
+            }
+        }
+
+        function downloadCSV() {
+            const table = document.getElementById('feedbackTable');
+            if (!table) return;
+
+            let csv = [];
+            const rows = table.getElementsByTagName('tr');
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = [];
+                const cells = rows[i].getElementsByTagName('td');
+                const headers = rows[i].getElementsByTagName('th');
+                
+                if (headers.length > 0) {
+                    for (let j = 0; j < headers.length; j++) {
+                        row.push(`"${headers[j].innerText}"`);
+                    }
+                } else {
+                    for (let j = 0; j < cells.length; j++) {
+                        // Escape quotes and wrap in quotes
+                        const cellText = cells[j].innerText.replace(/"/g, '""');
+                        row.push(`"${cellText}"`);
+                    }
+                }
+                csv.push(row.join(','));
+            }
+
+            const csvContent = csv.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `feedbacks_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        document.getElementById('searchBox').addEventListener('keyup', searchTable);
+    </script>
+</body>
+</html>
