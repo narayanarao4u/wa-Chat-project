@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WhatsApp Chat Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        #chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #messages {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+            position: relative;
+        }
+        .message.bot {
+            background-color: #DCF8C6;
+            margin-left: auto;
+            border-bottom-right-radius: 2px;
+        }
+        .message.user {
+            background-color: #E8E8E8;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+        }
+        .message .from {
+            font-weight: bold;
+        }
+        .message .from.bot {
+            color: #075E54;
+            text-align: right;
+        }
+        .message .from.user {
+            color: #128C7E;
+        }
+        .message .time {
+            font-size: 0.7em;
+            color: #666;
+            margin-top: 5px;
+            text-align: right;
+        }
+        .message .body {
+            margin-top: 5px;
+            word-wrap: break-word;
+        }
+        .message.bot .body {
+            color: #000;
+        }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="chat-container">
+        <h1>WhatsApp Chat Monitor</h1>
+        <div id="messages">
+            <% messages.forEach(function(msg) { %>
+                <div class="message <%= msg.isBot ? 'bot' : 'user' %>">
+                    <div class="from <%= msg.isBot ? 'bot' : 'user' %>"><%= msg.from %></div>
+                    <div class="body"><%= msg.body %></div>
+                    <div class="time"><%= msg.timestamp %></div>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const messagesDiv = document.getElementById('messages');
+
+        socket.on('new-message', (msg) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${msg.isBot ? 'bot' : 'user'}`;
+            messageDiv.innerHTML = `
+                <div class="from ${msg.isBot ? 'bot' : 'user'}">${msg.from}</div>
+                <div class="body">${msg.body}</div>
+                <div class="time">${msg.timestamp}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messageDiv.scrollIntoView({ behavior: 'smooth' });
+        });
+    </script>
+</body>
+</html>
