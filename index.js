@@ -6,6 +6,9 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
+// Add body parser middleware
+app.use(express.urlencoded({ extended: true }));
+
 // Setup EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -82,6 +85,42 @@ client.on('message', async (message) => {
 - help: Show this help message`;
         await message.reply(reply);
         addMessage(reply, true);
+    }
+});
+
+// Add new routes
+app.get('/send', (req, res) => {
+    res.render('send-message', { status: null });
+});
+
+app.post('/send-message', async (req, res) => {
+    const { phone, message } = req.body;
+    try {
+        // Format the phone number
+        const formattedPhone = phone.replace(/[^\d]/g, '') + '@c.us';
+        
+        // Send the message
+        await client.sendMessage(formattedPhone, message);
+        
+        // Add to message history
+        addMessage({
+            from: 'Web Interface',
+            body: `[To: ${phone}] ${message}`
+        });
+
+        res.render('send-message', {
+            status: {
+                type: 'success',
+                message: 'Message sent successfully!'
+            }
+        });
+    } catch (error) {
+        res.render('send-message', {
+            status: {
+                type: 'error',
+                message: 'Failed to send message. Please check the phone number and try again.'
+            }
+        });
     }
 });
 

@@ -60,12 +60,30 @@
         .message.bot .body {
             color: #000;
         }
+        .nav-links {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .nav-links a {
+            color: #128C7E;
+            text-decoration: none;
+            padding: 5px 10px;
+            border: 1px solid #128C7E;
+            border-radius: 4px;
+        }
+        .nav-links a:hover {
+            background-color: #128C7E;
+            color: white;
+        }
     </style>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <div id="chat-container">
         <h1>WhatsApp Chat Monitor</h1>
+        <div class="nav-links">
+            <a href="/send">Send New Message</a>
+        </div>
         <div id="messages">
             <% messages.forEach(function(msg) { %>
                 <div class="message <%= msg.isBot ? 'bot' : 'user' %>">
