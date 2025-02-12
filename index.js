@@ -1,5 +1,5 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+// const qrcode = require('qrcode-terminal');
 const path = require('path');
 const express = require('express');
 const app = express();
@@ -10,6 +10,7 @@ const csv = require('csv-parser');
 const fs = require('fs');
 const upload = multer({ dest: 'uploads/' });
 const db = require('./database');
+const qrcode = require('qrcode');
 
 // Add body parser middleware
 app.use(express.urlencoded({ extended: true }));
@@ -45,8 +46,14 @@ const saveFeedback = async (mobileNo, feedback) => {
     }
 };
 
+// Create a new WhatsApp client
+const client = new Client({
+    authStrategy: new LocalAuth()
+});
+
 // Add this function after the saveFeedback function
-const isWhatsAppNumber = async (number) => {
+const isWhatsAppNumber = async (number) => {    
+    
     try {
         const formattedNumber = '91' + number + '@c.us';
         const isRegistered = await client.isRegisteredUser(formattedNumber);
@@ -57,20 +64,26 @@ const isWhatsAppNumber = async (number) => {
     }
 };
 
-// Create a new WhatsApp client
-const client = new Client({
-    authStrategy: new LocalAuth()
-});
+
 
 // Generate QR Code
-client.on('qr', (qr) => {
-    console.log('Scan this QR code with your WhatsApp:');
-    qrcode.generate(qr, { small: true });
+client.on('qr', async (qr) => {
+    try {
+        const qrDataUrl = await qrcode.toDataURL(qr);
+        io.emit('qr', qrDataUrl);
+        console.log('QR code generated');
+    } catch (error) {
+        console.error('QR generation error:', error);
+    }
 });
 
 // When client is ready
 client.on('ready', () => {
     console.log('Client is ready!');
+    client.getState().then(async () => {
+        const info = await client.info;
+        io.emit('client-ready', info.wid.user); // Send phone number to client
+    });
 });
 
 // Listen for messages
@@ -145,6 +158,7 @@ app.post('/send-message', async (req, res) => {
         
         // Check if it's a valid WhatsApp number
         const isValid = await isWhatsAppNumber(cleanPhone);
+       
         
         if (!isValid) {
             throw new Error('Not a valid WhatsApp number');
@@ -165,6 +179,7 @@ app.post('/send-message', async (req, res) => {
             }
         });
     } catch (error) {
+        console.log('Error sending message:', error);
         res.render('send-message', {
             status: {
                 type: 'error',
@@ -264,9 +279,41 @@ app.get('/reports', async (req, res) => {
     }
 });
 
+// Add this route before other routes
+app.get('/login', (req, res) => {
+    res.render('qr-login');
+});
+
 // Web routes
 app.get('/', (req, res) => {
     res.render('chat', { messages: messages });
+});
+
+// Add Socket.IO event handlers after io initialization
+io.on('connection', (socket) => {
+    console.log('Client connected');
+
+    socket.on('check-status', async () => {
+        const state = await client.getState();
+        if (state === 'CONNECTED') {
+            const info = await client.info;
+            socket.emit('client-ready', info.wid.user);
+        }
+    });
+
+    socket.on('logout-whatsapp', async () => {
+        try {
+            await client.logout();
+            socket.emit('logout-complete');
+            console.log('WhatsApp logout successful');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+    });
 });
 
 // Start server

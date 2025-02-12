@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Login</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #qrcode {
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: none;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background: #e7f5e7;
+            color: #0f5132;
+        }
+        .waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        img {
+            max-width: 100%;
+        }
+        .button {
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            border: none;
+            display: none;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .logout-btn:hover {
+            background: #bb2d3b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WhatsApp Web Login</h1>
+        <div id="status" class="status waiting">
+            Initializing...
+        </div>
+        <div id="qrcode"></div>
+        <button id="logoutBtn" class="button logout-btn" onclick="handleLogout()">Logout</button>
+    </div>
+
+    <script>
+        const socket = io();
+        const qrDiv = document.getElementById('qrcode');
+        const statusDiv = document.getElementById('status');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        socket.on('qr', (qr) => {
+            qrDiv.style.display = 'block';
+            logoutBtn.style.display = 'none';
+            qrDiv.innerHTML = `<img src="${qr}" alt="QR Code">`;
+            statusDiv.className = 'status waiting';
+            statusDiv.textContent = 'Please scan this QR code with WhatsApp on your phone';
+        });
+
+        socket.on('client-ready', (phoneNumber) => {
+            qrDiv.style.display = 'none';
+            logoutBtn.style.display = 'inline-block';
+            statusDiv.className = 'status success';
+            statusDiv.textContent = `You're logged in with ${phoneNumber}`;
+        });
+
+        socket.on('logout-complete', () => {
+            logoutBtn.style.display = 'none';
+            statusDiv.className = 'status waiting';
+            statusDiv.textContent = 'Logged out successfully. Waiting for QR code...';
+        });
+
+        function handleLogout() {
+            if (confirm('Are you sure you want to logout?')) {
+                socket.emit('logout-whatsapp');
+                statusDiv.className = 'status waiting';
+                statusDiv.textContent = 'Logging out...';
+            }
+        }
+
+        // Check initial status
+        socket.emit('check-status');
+    </script>
+</body>
+</html>
