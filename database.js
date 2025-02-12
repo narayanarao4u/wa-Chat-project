@@ -22,6 +22,7 @@ async function initializeDatabase() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 mobile_no VARCHAR(15) UNIQUE,
                 landline_no VARCHAR(20),
+                isValid VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -48,11 +49,12 @@ initializeDatabase();
 
 const dbOps = {
     // Add customer from CSV
-    addCustomer: async (mobileNo, landlineNo) => {
+    addCustomer: async (mobileNo, landlineNo, isValid) => {
         try {
             await promisePool.query(
-                'INSERT INTO whatsapp_customers (mobile_no, landline_no) VALUES (?, ?) ON DUPLICATE KEY UPDATE landline_no = ?',
-                [mobileNo, landlineNo, landlineNo]
+                // 'INSERT INTO whatsapp_customers (mobile_no, landline_no, isValid) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE landline_no = ?',
+                'INSERT INTO whatsapp_customers (mobile_no, landline_no, isValid) VALUES (?, ?, ?) ',
+                [mobileNo, landlineNo, isValid]
             );
             return { success: true };
         } catch (error) {

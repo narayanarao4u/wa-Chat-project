@@ -45,6 +45,18 @@ const saveFeedback = async (mobileNo, feedback) => {
     }
 };
 
+// Add this function after the saveFeedback function
+const isWhatsAppNumber = async (number) => {
+    try {
+        const formattedNumber = '91' + number + '@c.us';
+        const isRegistered = await client.isRegisteredUser(formattedNumber);
+        return isRegistered;
+    } catch (error) {
+        console.error(`Error checking WhatsApp number ${number}:`, error);
+        return false;
+    }
+};
+
 // Create a new WhatsApp client
 const client = new Client({
     authStrategy: new LocalAuth()
@@ -125,16 +137,22 @@ app.get('/send', (req, res) => {
     res.render('send-message', { status: null });
 });
 
+// Also modify the send-message route to include validation
 app.post('/send-message', async (req, res) => {
     const { phone, message } = req.body;
     try {
-        // Format the phone number
-        const formattedPhone = phone.replace(/[^\d]/g, '') + '@c.us';
+        const cleanPhone = phone.replace(/[^\d]/g, '');
         
-        // Send the message
+        // Check if it's a valid WhatsApp number
+        const isValid = await isWhatsAppNumber(cleanPhone);
+        
+        if (!isValid) {
+            throw new Error('Not a valid WhatsApp number');
+        }
+
+        const formattedPhone = cleanPhone + '@c.us';
         await client.sendMessage(formattedPhone, message);
         
-        // Add to message history
         addMessage({
             from: 'Web Interface',
             body: `[To: ${phone}] ${message}`
@@ -150,7 +168,9 @@ app.post('/send-message', async (req, res) => {
         res.render('send-message', {
             status: {
                 type: 'error',
-                message: 'Failed to send message. Please check the phone number and try again.'
+                message: error.message === 'Not a valid WhatsApp number' 
+                    ? 'Invalid WhatsApp number. Please check the number and try again.'
+                    : 'Failed to send message. Please check the phone number and try again.'
             }
         });
     }
@@ -161,6 +181,7 @@ app.get('/upload', (req, res) => {
     res.render('upload-csv');
 });
 
+// Modify the upload-csv route to include WhatsApp number validation
 app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
     if (!req.file) {
         return res.status(400).send('No file uploaded');
@@ -178,9 +199,16 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                     const landlineNo = row.landlineNo.trim();
                     
                     if (mobileNo && mobileNo.length === 10) {
-                        // Save to database first
-                        await db.addCustomer(mobileNo, landlineNo);
+                        // Check if it's a valid WhatsApp number
+                        const isValid = await isWhatsAppNumber(mobileNo);
                         
+                        if (!isValid) {
+                            console.log(`Not a valid WhatsApp number: ${mobileNo}`);
+                            continue;
+                        }
+
+                        // Save to database and send message only if it's a valid WhatsApp number
+                        await db.addCustomer(mobileNo, landlineNo, isValid);
                         const formattedPhone = '91' + mobileNo + '@c.us';
                         const message = `
 
