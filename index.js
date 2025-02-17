@@ -86,16 +86,61 @@ client.on('ready', () => {
     });
 });
 
-// Listen for messages
+// Modify the message handler
 client.on('message', async (message) => {
     addMessage(message);
     const content = message.body.toLowerCase();
     const from = message.from.replace('@c.us', '').slice(2); // Remove '91' prefix and '@c.us'
 
-    // Check if this is a feedback response
-    if (content !== 'hi' && content !== 'hello' && content !== 'time' && 
-        content !== 'help' && content !== 'bill25' && !content.startsWith('hi ')) {
-        
+    console.log("Received message from:", from, "Content:", content);
+    
+    // Handle commands first
+    if (content.startsWith('hi ') || 
+        content === 'bill25' || 
+        content === 'hello' || 
+        content === 'hi' ||
+        content === 'time' ||
+        content === 'help') {
+        // Handle existing commands
+        if (content.startsWith('hi ')) {
+            const nameOrPhone = message.body.slice(3).trim();
+            const reply = `👋 Hello ${nameOrPhone}! Nice to meet you!`;
+            await message.reply(reply);
+            addMessage(reply, true);
+        }
+        else if (content === 'bill25') {
+            try {
+                const media = MessageMedia.fromFilePath(path.join(__dirname, 'billno25.pdf'));
+                await message.reply(media, undefined, { caption: 'Here is your Bill No. 25' });
+                addMessage('Here is your Bill No. 25 [PDF file attached]', true);
+            } catch (error) {
+                const reply = 'Sorry, I could not find the requested bill.';
+                await message.reply(reply);
+                addMessage(reply, true);
+            }
+        }
+        else if (content === 'hello' || content === 'hi') {
+            const reply = '👋 Hello! How can I help you today?';
+            await message.reply(reply);
+            addMessage(reply, true);
+        }
+        else if (content === 'time') {
+            const reply = `The current time is: ${new Date().toLocaleTimeString()}`;
+            await message.reply(reply);
+            addMessage(reply, true);
+        }
+        else if (content === 'help') {
+            const reply = `Available commands:
+- hello/hi: Get a greeting
+- hi <name/phone>: Get a personalized greeting
+- time: Get current time
+- bill25: Get Bill No. 25 PDF
+- help: Show this help message`;
+            await message.reply(reply);
+            addMessage(reply, true);
+        }
+    } else {
+        // Handle as feedback
         const result = await saveFeedback(from, message.body);
         if (result.success) {
             const reply = 'Thank you for your feedback. We appreciate your response.';
@@ -103,45 +148,14 @@ client.on('message', async (message) => {
             addMessage(reply, true);
         } else {
             console.log(`Feedback not saved: ${result.message} for number ${from}`);
+            console.log('error Message:', result.error);
+            if (result.message === "Duplicate feedback detected") {
+                // Optionally notify user about duplicate feedback
+                const reply = 'We have already received your feedback. Thank you.';
+                await message.reply(reply);
+                addMessage(reply, true);
+            }
         }
-    }
-
-    if (content.startsWith('hi ')) {
-        const nameOrPhone = message.body.slice(3).trim();
-        const reply = `👋 Hello ${nameOrPhone}! Nice to meet you!`;
-        await message.reply(reply);
-        addMessage(reply, true);
-    }
-    else if (content === 'bill25') {
-        try {
-            const media = MessageMedia.fromFilePath(path.join(__dirname, 'billno25.pdf'));
-            await message.reply(media, undefined, { caption: 'Here is your Bill No. 25' });
-            addMessage('Here is your Bill No. 25 [PDF file attached]', true);
-        } catch (error) {
-            const reply = 'Sorry, I could not find the requested bill.';
-            await message.reply(reply);
-            addMessage(reply, true);
-        }
-    }
-    else if (content === 'hello' || content === 'hi') {
-        const reply = '👋 Hello! How can I help you today?';
-        await message.reply(reply);
-        addMessage(reply, true);
-    }
-    else if (content === 'time') {
-        const reply = `The current time is: ${new Date().toLocaleTimeString()}`;
-        await message.reply(reply);
-        addMessage(reply, true);
-    }
-    else if (content === 'help') {
-        const reply = `Available commands:
-- hello/hi: Get a greeting
-- hi <name/phone>: Get a personalized greeting
-- time: Get current time
-- bill25: Get Bill No. 25 PDF
-- help: Show this help message`;
-        await message.reply(reply);
-        addMessage(reply, true);
     }
 });
 
@@ -150,26 +164,49 @@ app.get('/send', (req, res) => {
     res.render('send-message', { status: null });
 });
 
-// Also modify the send-message route to include validation
+// Update the send-message route with better error handling
 app.post('/send-message', async (req, res) => {
     const { phone, message } = req.body;
+    console.log('Sending message:', phone, message);
+    
     try {
+        if (!phone || !message) {
+            throw new Error('Phone number and message are required');
+        }
+
+        // Get client state first
+        const state = await client.getState();
+        if (state !== 'CONNECTED') {
+            throw new Error('WhatsApp client is not connected');
+        }
+
         const cleanPhone = phone.replace(/[^\d]/g, '');
+        // console.log('Cleaned phone:', cleanPhone);
         
-        // Check if it's a valid WhatsApp number
-        const isValid = await isWhatsAppNumber(cleanPhone);
-       
+        // if (cleanPhone.length !== 10) {
+        //     throw new Error('Invalid phone number format');
+        // }
+
+        // Format phone number and check if it's registered
+        // const formattedPhone = '91' + cleanPhone + '@c.us';
+        const formattedPhone =  cleanPhone + '@c.us';
+        const isRegistered = await client.isRegisteredUser(formattedPhone);
         
-        if (!isValid) {
+        if (!isRegistered) {
             throw new Error('Not a valid WhatsApp number');
         }
 
-        const formattedPhone = cleanPhone + '@c.us';
-        await client.sendMessage(formattedPhone, message);
-        
+        // Send the message
+        const sent = await client.sendMessage(formattedPhone, message);
+        if (!sent) {
+            throw new Error('Failed to send message');
+        }
+
+        // Log success and add to message history
+        console.log(`Message sent successfully to ${cleanPhone}`);
         addMessage({
             from: 'Web Interface',
-            body: `[To: ${phone}] ${message}`
+            body: `[To: ${cleanPhone}] ${message}`
         });
 
         res.render('send-message', {
@@ -179,13 +216,22 @@ app.post('/send-message', async (req, res) => {
             }
         });
     } catch (error) {
-        console.log('Error sending message:', error);
+        console.error('Error in send-message:', error);
+        
+        // Determine user-friendly error message
+        let userMessage = 'Failed to send message. Please try again.';
+        if (error.message === 'Not a valid WhatsApp number') {
+            userMessage = 'This number is not registered on WhatsApp.';
+        } else if (error.message === 'WhatsApp client is not connected') {
+            userMessage = 'Please login to WhatsApp Web first.';
+        } else if (error.message === 'Invalid phone number format') {
+            userMessage = 'Please enter a valid 10-digit phone number.';
+        }
+
         res.render('send-message', {
             status: {
                 type: 'error',
-                message: error.message === 'Not a valid WhatsApp number' 
-                    ? 'Invalid WhatsApp number. Please check the number and try again.'
-                    : 'Failed to send message. Please check the phone number and try again.'
+                message: userMessage
             }
         });
     }
@@ -261,6 +307,7 @@ Please share your reasons for disconnection to help us provide better service.
 app.get('/feedbacks', async (req, res) => {
     try {
         const feedbacks = await db.getFeedbacks();
+       
         res.render('feedbacks', { feedbacks });
     } catch (error) {
         console.error('Error reading feedbacks:', error);

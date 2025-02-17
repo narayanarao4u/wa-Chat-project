@@ -20,7 +20,7 @@ async function initializeDatabase() {
         await promisePool.query(`
             CREATE TABLE IF NOT EXISTS whatsapp_customers (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                mobile_no VARCHAR(15) UNIQUE,
+                mobile_no VARCHAR(15) ,
                 landline_no VARCHAR(20),
                 isValid VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -33,8 +33,7 @@ async function initializeDatabase() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 mobile_no VARCHAR(15),
                 feedback TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (mobile_no) REFERENCES whatsapp_customers(mobile_no)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
@@ -71,12 +70,26 @@ const dbOps = {
                 'SELECT mobile_no FROM whatsapp_customers WHERE mobile_no = ?',
                 [mobileNo]
             );
-
+                   
             if (customers.length === 0) {
                 return { success: false, message: "Mobile number not found in customers list" };
             }
 
-            // Save feedback
+            // Check for duplicate feedback in last 5 minutes
+            const [recentFeedbacks] = await promisePool.query(
+                `SELECT * FROM whatsapp_feedbacks 
+                WHERE mobile_no = ? 
+                AND feedback = ?
+                AND created_at >= NOW() - INTERVAL 5 MINUTE`,
+                [mobileNo, feedback]
+            );
+
+            if (recentFeedbacks.length > 0) {
+                return { success: false, message: "Duplicate feedback detected" };
+            }
+
+            // Save feedback if no recent duplicate
+            console.log('Saving feedback:', mobileNo, feedback);
             await promisePool.query(
                 'INSERT INTO whatsapp_feedbacks (mobile_no, feedback) VALUES (?, ?)',
                 [mobileNo, feedback]
