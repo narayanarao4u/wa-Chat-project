@@ -12,6 +12,10 @@ const upload = multer({ dest: 'uploads/' });
 const db = require('./database');
 const qrcode = require('qrcode');
 
+
+const whiteListNo = ['9490044441', '94944444441'];
+const pendingUploads = {};
+
 // Add body parser middleware
 app.use(express.urlencoded({ extended: true }));
 
@@ -94,14 +98,56 @@ client.on('message', async (message) => {
 
     console.log("Received message from:", from, "Content:", content);
     
-    // Handle commands first
-    if (content.startsWith('hi ') || 
-        content === 'bill25' || 
-        content === 'hello' || 
-        content === 'hi' ||
-        content === 'time' ||
-        content === 'help') {
-        // Handle existing commands
+    const contentList = ['hi', 'hello', 'bill25', 'time', 'help', '#letterupload'];
+    
+    // Check for letter upload process first
+    if (whiteListNo.includes(from)) {
+        if (message.body === "#letterupload") {
+            pendingUploads[from] = { step: 'awaitingSubject' };
+            const reply = "Please provide the subject of the letter.";
+            await message.reply(reply);
+            addMessage(reply, true);
+            return;
+        } else if (pendingUploads[from] && pendingUploads[from].step === 'awaitingSubject') {
+            pendingUploads[from].subject = message.body;
+            pendingUploads[from].step = 'awaitingLetter';
+            const reply = "Please upload the letter.";
+            await message.reply(reply);
+            addMessage(reply, true);
+            return;
+        } else if (pendingUploads[from] && pendingUploads[from].step === 'awaitingLetter' && message.hasMedia) {
+            try {
+                const media = await message.downloadMedia();
+                if (media) {
+                    const subject = pendingUploads[from].subject;
+                    const extension = media.mimetype.split('/')[1];
+                    const fileName = `${subject}_${Date.now()}.${extension}`;
+                    const filePath = path.join(__dirname, 'uploads', fileName);
+                    
+                    // Ensure uploads directory exists
+                    if (!fs.existsSync(path.join(__dirname, 'WhatsAppuploads'))) {
+                        fs.mkdirSync(path.join(__dirname, 'WhatsAppuploads'));
+                    }
+                    
+                    fs.writeFileSync(filePath, media.data, { encoding: 'base64' });
+                    delete pendingUploads[from];
+                    const reply = `Saved file with subject "${subject}" from ${from} to ${filePath}`;
+                    await message.reply(reply);
+                    addMessage(reply, true);
+                }
+            } catch (error) {
+                console.error('Error handling letter upload:', error);
+                const reply = "Sorry, there was an error processing your letter. Please try again.";
+                await message.reply(reply);
+                addMessage(reply, true);
+            }
+            return;
+        }
+    }
+
+    // Handle other commands
+    if (content.startsWith('hi ') || contentList.includes(content)) {
+        // Remove the old #letterupload handler from here
         if (content.startsWith('hi ')) {
             const nameOrPhone = message.body.slice(3).trim();
             const reply = `👋 Hello ${nameOrPhone}! Nice to meet you!`;
@@ -157,6 +203,29 @@ client.on('message', async (message) => {
             }
         }
     }
+});
+
+
+const whiteListedIPs = ['10.34.128.25'];
+
+// Add IP restriction middleware
+const restrictIP = (req, res, next) => {
+    const clientIP = req.ip || req.connection.remoteAddress;
+    console.log('Client IP:', clientIP);
+    
+    if (whiteListedIPs.includes(clientIP)) {
+        next();
+    } else {
+        res.status(403).send('Access Denied: Your IP is not whitelisted');
+    }
+};
+
+// Apply middleware to all routes except /feedbacks
+app.use((req, res, next) => {
+    if (req.path !== '/feedbacks') {
+        return restrictIP(req, res, next);
+    }
+    next();
 });
 
 // Add new routes
@@ -272,12 +341,17 @@ app.post('/upload-csv', upload.single('csvFile'), async (req, res) => {
                         await db.addCustomer(mobileNo, landlineNo, isValid);
                         const formattedPhone = '91' + mobileNo + '@c.us';
                         const message = `
+Dear Sir/Madam,
+Greetings from BSNL Visakhapatnam,
 
-Your landline No ${landlineNo} is disconnected recently. 
+Your BSNL landline / FTTH No ${landlineNo} is disconnected recently. 
 Please share your reasons for disconnection to help us provide better service.
   1. excess billing issue
   2. poor service quality
-  3. other reasons
+  or please specify the reason
+
+Thank you
+BSNL Visakhapatnam
 
                         `;
                         
@@ -371,3 +445,4 @@ http.listen(PORT, () => {
 
 // Initialize the client
 client.initialize();
+
